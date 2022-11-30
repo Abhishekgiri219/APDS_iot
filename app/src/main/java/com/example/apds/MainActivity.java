@@ -6,6 +6,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
+import android.app.PendingIntent;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -14,6 +16,7 @@ import android.hardware.SensorManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.telephony.SmsManager;
 import android.util.Log;
 import android.widget.TextView;
 
@@ -28,102 +31,103 @@ import java.util.Date;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements LocationListener {
-    TextView textView , textViewA;
-    protected LocationManager locationManager;
 
+    TextView locationView, accelerationView, rotationView;
+
+    protected LocationManager locationManager;
     SensorManager sm = null;
 
     List list;
 
     long locationLastUpdate, locationNowUpdate;
 
-    long lastUpdate, actualTime;
+    long accnLastUpdate, accnNowUpdate;
+
+    long gyroLastUpdate, gyroNowUpdate;
+
     float oldAccVal = 0.0f;
     float[] gravity = new float[3];
     float[] linear_acceleration = new float[3];
 
-    SensorEventListener accSensor = new SensorEventListener() {
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    float[] oldOrientations = new float[3];
 
-        public void onSensorChanged(SensorEvent event) {
+    double latitude, longitude;
 
-            actualTime = Calendar.getInstance().getTimeInMillis();
-
-            if(actualTime - lastUpdate > 20){
-
-                final float alpha = 0.8f;
-
-                gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
-                gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
-                gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
-
-                linear_acceleration[0] = event.values[0] - gravity[0];
-                linear_acceleration[1] = event.values[1] - gravity[1];
-                linear_acceleration[2] = event.values[2] - gravity[2];
-
-                float val = 0;
-
-                for(int i = 0 ; i < 3 ; i++){
-                    val += linear_acceleration[i]*linear_acceleration[i];
-                }
-
-                val = (float) Math.sqrt(val);
-
-                if(val - oldAccVal > 9.81){
-                    Toast.makeText(getApplicationContext(), "Accident Happened ! force is " + ((val - oldAccVal)/9.81) + " g", Toast.LENGTH_SHORT).show();
-                }
-
-                textViewA = findViewById(R.id.text_viewA);
-
-                String msg = "x: "+linear_acceleration[0]+"\ny: "+linear_acceleration[1]+"\nz: "+linear_acceleration[2] + "\n";
-
-                msg += val + "";
-
-                textViewA.setText(msg);
-
-                oldAccVal = val;
-
-                lastUpdate = actualTime;
-            }
-        }
-    };
+    String num = "8987032722";
+    String msg = "Help me I have been in a car accident!! My location : http://maps.google.com/?q=";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        lastUpdate = Calendar.getInstance().getTimeInMillis();
+        init();
 
-        sm = (SensorManager)getSystemService(SENSOR_SERVICE);
+        askPermissionsAndLocation();
 
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        setUpAccelerometer();
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_COARSE_LOCATION }, 100 );
-            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_FINE_LOCATION }, 101 );
-            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_BACKGROUND_LOCATION }, 102 );
-        } else
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, this);
+        setUpGyroscope();
+    }
 
-
-
+    public void setUpAccelerometer(){
         list = sm.getSensorList(Sensor.TYPE_ACCELEROMETER);
         if(list.size()>0){
-            sm.registerListener(accSensor, (Sensor) list.get(0), SensorManager.SENSOR_DELAY_UI);
+            sm.registerListener(accSensor, (Sensor) list.get(0), SensorManager.SENSOR_DELAY_NORMAL);
         }else{
-            Toast.makeText(getBaseContext(), "Error: No Sensor.", Toast.LENGTH_LONG).show();
+            accelerationView = findViewById(R.id.acceleration);
+            accelerationView.setText("No acceleration sensor");
         }
+    }
+
+    public void setUpGyroscope(){
+        list = sm.getSensorList(Sensor.TYPE_ROTATION_VECTOR );
+        if(list.size()>0){
+            sm.registerListener(rotSensor, (Sensor) list.get(0), SensorManager.SENSOR_DELAY_NORMAL);
+        }else{
+            accelerationView = findViewById(R.id.rotation);
+            accelerationView.setText("No rotation sensor");
+        }
+    }
+
+    public void init(){
+        accnLastUpdate = Calendar.getInstance().getTimeInMillis();
+        gyroLastUpdate = Calendar.getInstance().getTimeInMillis();
+        locationLastUpdate = Calendar.getInstance().getTimeInMillis();
+        sm = (SensorManager)getSystemService(SENSOR_SERVICE);
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+    }
+
+    public void askPermissionsAndLocation(){
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED){
+            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_FINE_LOCATION }, 101 );
+        }
+
+        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
+            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_COARSE_LOCATION }, 100 );
+        }
+
+        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED){
+            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_BACKGROUND_LOCATION }, 102 );
+        }
+
+        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED){
+            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.SEND_SMS }, 103 );
+        }
+
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
     }
 
     @Override
     public void onLocationChanged(@NonNull Location location) {
         locationNowUpdate = Calendar.getInstance().getTimeInMillis();
 
-        if(locationNowUpdate - locationLastUpdate > 3000) {
-            textView = findViewById(R.id.text_view);
-            String msg = "Latitude:" + location.getLatitude() + ", Longitude:" + location.getLongitude() + ", speed: " + location.getSpeed();
-            textView.setText(msg);
+        if(locationNowUpdate - locationLastUpdate > 1000) {
+            locationView = findViewById(R.id.location);
+            latitude = location.getLatitude();
+            longitude = location.getLongitude();
+            String msg = "Latitude:" + latitude + ", Longitude:" + longitude + ", speed: " + location.getSpeed();
+            locationView.setText(msg);
 
             locationLastUpdate = locationNowUpdate;
         }
@@ -150,5 +154,112 @@ public class MainActivity extends AppCompatActivity implements LocationListener 
             sm.unregisterListener(accSensor);
         }
         super.onStop();
+    }
+
+    @Override
+    protected void onPostResume() {
+        sm.registerListener(accSensor, (Sensor) list.get(0), SensorManager.SENSOR_DELAY_NORMAL);
+        super.onPostResume();
+    }
+
+    // acceleration event listener
+
+    SensorEventListener accSensor = new SensorEventListener() {
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+
+        public void onSensorChanged(SensorEvent event) {
+
+            accnLastUpdate = Calendar.getInstance().getTimeInMillis();
+
+            if(accnLastUpdate - accnNowUpdate > 20){
+
+                final float alpha = 0.8f;
+
+                gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
+                gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
+                gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
+
+                linear_acceleration[0] = event.values[0] - gravity[0];
+                linear_acceleration[1] = event.values[1] - gravity[1];
+                linear_acceleration[2] = event.values[2] - gravity[2];
+
+                float val = 0;
+
+                for(int i = 0 ; i < 3 ; i++){
+                    val += linear_acceleration[i]*linear_acceleration[i];
+                }
+
+                val = (float) Math.sqrt(val);
+
+                if(val - oldAccVal > 9.81){
+                    Toast.makeText(getApplicationContext(), "Accident Happened ! force is " + ((val - oldAccVal)/9.81) + " g", Toast.LENGTH_SHORT).show();
+
+                    sendMessage("collision");
+                }
+
+                accelerationView = findViewById(R.id.acceleration);
+
+                String msg = "x: "+linear_acceleration[0]+"\ny: "+linear_acceleration[1]+"\nz: "+linear_acceleration[2] + "\n";
+
+                msg += val + "";
+
+                accelerationView.setText(msg);
+
+                oldAccVal = val;
+
+                accnLastUpdate = accnNowUpdate;
+            }
+        }
+    };
+
+    // rotation event listener
+
+    SensorEventListener rotSensor = new SensorEventListener() {
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+
+        public void onSensorChanged(SensorEvent event) {
+
+            gyroNowUpdate = Calendar.getInstance().getTimeInMillis();
+
+            if(gyroNowUpdate - gyroLastUpdate > 10){
+
+                float[] rotationMatrix = new float[16];
+                SensorManager.getRotationMatrixFromVector(
+                        rotationMatrix, event.values);
+
+                // Convert to orientations
+                float[] orientations = new float[3];
+                SensorManager.getOrientation(rotationMatrix, orientations);
+
+                for(int i = 0; i < 3; i++) {
+                    orientations[i] = (float)(Math.toDegrees(orientations[i]));
+                }
+
+                rotationView = findViewById(R.id.rotation);
+
+                String msg = "x : " + orientations[0] + "\ny : " + orientations[1] + "\nz : " + orientations[2] + "\n";
+
+                rotationView.setText(msg);
+
+                gyroLastUpdate = gyroNowUpdate;
+            }
+        }
+    };
+
+    public void sendMessage(String accidentType){
+        Intent intent=new Intent(getApplicationContext(),MainActivity.class);
+
+        PendingIntent pi=PendingIntent.getActivity(getApplicationContext(),0,intent,0);
+
+        SmsManager sms= SmsManager.getDefault();
+
+        ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.SEND_SMS}, 1);
+
+        String completeMsg = msg + latitude + "," + longitude + " accident type : " + accidentType;
+
+        sms.sendTextMessage(num, null, completeMsg, null, null);
+        sms.sendTextMessage(num,null, completeMsg ,pi,null);
+
+//        Toast.makeText(getApplicationContext(),"Message Sent successfully!", Toast.LENGTH_LONG).show();
     }
 }
