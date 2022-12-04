@@ -36,6 +36,10 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
 public class MainActivity extends AppCompatActivity implements SensorEventListener, LocationListener {
     private SensorManager mSensorManager = null;
 
@@ -77,8 +81,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private TextView mAzimuthView;
     private TextView mPitchView;
     private TextView mRollView;
-    private TextView mAccelerationView;
-    private int radioSelection;
+
+
     DecimalFormat d = new DecimalFormat("#.##");
 
     protected LocationManager locationManager;
@@ -97,7 +101,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public float oldAccVal;
     public float[] linear_acceleration = new float[3];
     public float[] gravity = new float[3];
-    private TextView locationView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -132,7 +135,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // GUI stuff
         mHandler = new Handler();
-        radioSelection = 0;
         d.setRoundingMode(RoundingMode.HALF_UP);
         d.setMaximumFractionDigits(3);
         d.setMinimumFractionDigits(3);
@@ -181,6 +183,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.SEND_SMS}, 103);
         }
 
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.INTERNET}, 104);
+        }
+
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
     }
 
@@ -189,7 +195,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         locationNowUpdate = Calendar.getInstance().getTimeInMillis();
 
         if (locationNowUpdate - locationLastUpdate > 1000) {
-            locationView = findViewById(R.id.location);
+            TextView locationView = findViewById(R.id.location);
             latitude = location.getLatitude();
             longitude = location.getLongitude();
             String msg = "Latitude:" + latitude + ", Longitude:" + longitude + ", speed: " + location.getSpeed();
@@ -304,12 +310,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             val = (float) Math.sqrt(val);
 
             if (val - oldAccVal > 9.81) {
-                Toast.makeText(getApplicationContext(), "Accident Happened ! force is " + ((val - oldAccVal) / 9.81) + " g", Toast.LENGTH_SHORT).show();
+//                Toast.makeText(getApplicationContext(), "Accident Happened ! force is " + ((val - oldAccVal) / 9.81) + " g", Toast.LENGTH_SHORT).show();
 
                 sendMessage("collision");
+
+                getPrediction(linear_acceleration[0], linear_acceleration[1], linear_acceleration[2]);
             }
 
-            mAccelerationView = findViewById(R.id.acceleration);
+            TextView mAccelerationView = findViewById(R.id.acceleration);
 
             String msg = "x: " + linear_acceleration[0] + "\ny: " + linear_acceleration[1] + "\nz: " + linear_acceleration[2] + "\n";
 
@@ -321,6 +329,40 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             accnLastUpdate = accnNowUpdate;
         }
+    }
+
+    public void getPrediction(Float x, Float y, Float z)
+    {
+        String value = x + "," + y + "," + z;
+
+//        Toast.makeText(getApplicationContext(), value, Toast.LENGTH_LONG).show();
+
+        Call<Results> call = RetrofitClient.getInstance().getMyApi().getPredictionByValues(value);
+        call.enqueue(new Callback<Results>() {
+            @Override
+            public void onResponse(@NonNull Call<Results> call, @NonNull Response<Results> response) {
+                Toast.makeText(getApplicationContext(), response.toString(), Toast.LENGTH_LONG).show();
+
+                Results prediction = response.body();
+
+//                Log.i(String.valueOf(this),response.toString());
+
+                if(prediction != null){
+                    Toast.makeText(getApplicationContext(), prediction.getResult(), Toast.LENGTH_SHORT).show();
+
+                    if(prediction.getResult() == "Accident !")
+                        sendMessage("Collision");
+                }
+                else{
+                    Log.i(String.valueOf(this), "error in fetching data");
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Results> call, Throwable t) {
+                Toast.makeText(getApplicationContext(), t.toString(), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     // calculates orientation angles from accelerometer and magnetometer output
