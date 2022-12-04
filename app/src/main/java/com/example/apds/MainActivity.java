@@ -198,7 +198,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             TextView locationView = findViewById(R.id.location);
             latitude = location.getLatitude();
             longitude = location.getLongitude();
-            String msg = "Latitude:" + latitude + ", Longitude:" + longitude + ", speed: " + location.getSpeed();
+            String msg = "Latitude:" + latitude + ",\nLongitude:" + longitude;
             locationView.setText(msg);
 
             locationLastUpdate = locationNowUpdate;
@@ -311,9 +311,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             if (val - oldAccVal > 9.81) {
 //                Toast.makeText(getApplicationContext(), "Accident Happened ! force is " + ((val - oldAccVal) / 9.81) + " g", Toast.LENGTH_SHORT).show();
-
-                sendMessage("collision");
-
                 getPrediction(linear_acceleration[0], linear_acceleration[1], linear_acceleration[2]);
             }
 
@@ -348,7 +345,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 //                Log.i(String.valueOf(this),response.toString());
 
                 if(prediction != null){
-                    Toast.makeText(getApplicationContext(), prediction.getResult(), Toast.LENGTH_SHORT).show();
+//                    Toast.makeText(getApplicationContext(), prediction.getResult(), Toast.LENGTH_SHORT).show();
 
                     if(prediction.getResult() == "Accident !")
                         sendMessage("Collision");
