@@ -33,6 +33,7 @@ import java.text.DecimalFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -248,8 +249,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         SmsManager sms = SmsManager.getDefault();
 
-        ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.SEND_SMS}, 1);
-
         String completeMsg = msg + latitude + "," + longitude + " accident type : " + accidentType;
 
         sms.sendTextMessage(num, null, completeMsg, null, null);
@@ -338,7 +337,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         call.enqueue(new Callback<Results>() {
             @Override
             public void onResponse(@NonNull Call<Results> call, @NonNull Response<Results> response) {
-                Toast.makeText(getApplicationContext(), response.toString(), Toast.LENGTH_LONG).show();
+//                Toast.makeText(getApplicationContext(), response.toString(), Toast.LENGTH_LONG).show();
 
                 Results prediction = response.body();
 
@@ -347,7 +346,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 if(prediction != null){
 //                    Toast.makeText(getApplicationContext(), prediction.getResult(), Toast.LENGTH_SHORT).show();
 
-                    if(prediction.getResult() == "Accident !")
+                    String result = prediction.getResult();
+
+                    Toast.makeText(getApplicationContext(), result , Toast.LENGTH_SHORT).show();
+
+                    if(Objects.equals(result, "Accident !"))
                         sendMessage("Collision");
                 }
                 else{
